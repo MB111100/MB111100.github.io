@@ -23,7 +23,7 @@
 <body>
 
 <h1>Doctor Runner 🧑‍⚕️</h1>
-<p>Press SPACE to jump / restart</p>
+<p>SPACE = jump / restart / continue</p>
 
 <canvas id="game" width="800" height="200"></canvas>
 
@@ -31,7 +31,7 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-let doctor, obstacles, speed, frame, score, gameOver;
+let doctor, obstacles, coins, speed, frame, score, gameOver, won, messageTimer;
 
 function init() {
   doctor = {
@@ -46,10 +46,13 @@ function init() {
   };
 
   obstacles = [];
+  coins = [];
   speed = 5;
   frame = 0;
   score = 0;
   gameOver = false;
+  won = false;
+  messageTimer = 0;
 }
 
 init();
@@ -58,6 +61,8 @@ document.addEventListener("keydown", e => {
   if (e.code === "Space") {
     if (gameOver) {
       init();
+    } else if (won) {
+      won = false;
     } else if (doctor.grounded) {
       doctor.dy = doctor.jumpPower;
       doctor.grounded = false;
@@ -66,26 +71,53 @@ document.addEventListener("keydown", e => {
 });
 
 function spawnObstacle() {
-  obstacles.push({
+  let type = Math.random();
+
+  // Single
+  if (type < 0.5) {
+    obstacles.push({ x: canvas.width, y: 150, w: 20, h: 20 });
+  }
+  // Double horizontal
+  else if (type < 0.75) {
+    obstacles.push({ x: canvas.width, y: 150, w: 20, h: 20 });
+    obstacles.push({ x: canvas.width + 25, y: 150, w: 20, h: 20 });
+  }
+  // Double vertical
+  else {
+    obstacles.push({ x: canvas.width, y: 150, w: 20, h: 20 });
+    obstacles.push({ x: canvas.width, y: 120, w: 20, h: 20 });
+  }
+}
+
+function spawnCoin(label) {
+  coins.push({
     x: canvas.width,
-    y: 150,
-    size: 20
+    y: 110,
+    size: 18,
+    label: label,
+    collected: false
   });
 }
 
 function update() {
-  if (gameOver) return;
+  if (gameOver || won) return;
 
   frame++;
 
-  // Increase difficulty
+  // difficulty scaling
   if (frame % 300 === 0) speed += 0.5;
 
-  if (frame % Math.max(60, 120 - speed * 5) === 0) {
+  // random spawn timing
+  if (frame % Math.floor(70 + Math.random() * 60) === 0) {
     spawnObstacle();
   }
 
-  // Physics
+  // spawn milestone coins
+  if (score === 10 && !coins.find(c => c.label === "M1")) spawnCoin("M1");
+  if (score === 20 && !coins.find(c => c.label === "M2")) spawnCoin("M2");
+  if (score === 30 && !coins.find(c => c.label === "M3")) spawnCoin("M3");
+
+  // physics
   doctor.dy += doctor.gravity;
   doctor.y += doctor.dy;
 
@@ -95,84 +127,105 @@ function update() {
     doctor.grounded = true;
   }
 
-  // Obstacles
+  // obstacles
   obstacles.forEach((obs, i) => {
     obs.x -= speed;
 
-    // Collision
     if (
-      doctor.x < obs.x + obs.size &&
+      doctor.x < obs.x + obs.w &&
       doctor.x + doctor.width > obs.x &&
-      doctor.y < obs.y + obs.size &&
+      doctor.y < obs.y + obs.h &&
       doctor.y + doctor.height > obs.y
     ) {
       gameOver = true;
     }
 
-    // Remove + score
-    if (obs.x + obs.size < 0) {
+    if (obs.x + obs.w < 0) {
       obstacles.splice(i, 1);
       score++;
+    }
+  });
+
+  // coins
+  coins.forEach((coin, i) => {
+    coin.x -= speed;
+
+    if (
+      !coin.collected &&
+      doctor.x < coin.x + coin.size &&
+      doctor.x + doctor.width > coin.x &&
+      doctor.y < coin.y + coin.size &&
+      doctor.y + doctor.height > coin.y
+    ) {
+      coin.collected = true;
+
+      if (coin.label === "M3") {
+        won = true;
+        messageTimer = 180;
+      }
+    }
+
+    if (coin.x + coin.size < 0) {
+      coins.splice(i, 1);
     }
   });
 }
 
 function drawDoctor(x, y) {
-  // Pixel doctor (simple block style)
-  ctx.fillStyle = "#ffffff"; // coat
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(x, y, 24, 40);
 
-  ctx.fillStyle = "#f1c27d"; // face
+  ctx.fillStyle = "#f1c27d";
   ctx.fillRect(x + 6, y - 10, 12, 10);
 
-  ctx.fillStyle = "#000"; // eyes
+  ctx.fillStyle = "#000";
   ctx.fillRect(x + 9, y - 6, 2, 2);
   ctx.fillRect(x + 13, y - 6, 2, 2);
 
-  ctx.fillStyle = "#3498db"; // pants
+  ctx.fillStyle = "#3498db";
   ctx.fillRect(x, y + 30, 24, 10);
 
-  ctx.fillStyle = "#e74c3c"; // cross
+  ctx.fillStyle = "#e74c3c";
   ctx.fillRect(x + 10, y + 10, 4, 12);
   ctx.fillRect(x + 6, y + 14, 12, 4);
 }
 
-function drawVirus(x, y, size) {
+function drawVirus(x, y, w, h) {
   ctx.fillStyle = "#27ae60";
-  ctx.beginPath();
-  ctx.arc(x + size/2, y + size/2, size/2, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillRect(x, y, w, h);
+}
 
-  // spikes
-  for (let i = 0; i < 8; i++) {
-    let angle = (Math.PI * 2 / 8) * i;
-    let sx = x + size/2 + Math.cos(angle) * (size/2 + 4);
-    let sy = y + size/2 + Math.sin(angle) * (size/2 + 4);
-    ctx.fillRect(sx, sy, 3, 3);
-  }
+function drawCoin(c) {
+  ctx.fillStyle = "#f1c40f";
+  ctx.fillRect(c.x, c.y, c.size, c.size);
+
+  ctx.fillStyle = "#000";
+  ctx.font = "10px Arial";
+  ctx.fillText(c.label, c.x + 2, c.y + 12);
 }
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Ground
+  // ground
   ctx.fillStyle = "#7f8c8d";
   ctx.fillRect(0, 180, canvas.width, 2);
 
-  // Doctor
   drawDoctor(doctor.x, doctor.y);
 
-  // Obstacles
-  obstacles.forEach(obs => {
-    drawVirus(obs.x, obs.y, obs.size);
-  });
+  obstacles.forEach(o => drawVirus(o.x, o.y, o.w, o.h));
+  coins.forEach(c => { if (!c.collected) drawCoin(c); });
 
-  // Score
   ctx.fillStyle = "#2c3e50";
   ctx.fillText("Score: " + score, 650, 20);
 
   if (gameOver) {
-    ctx.fillText("Game Over - Press SPACE to restart", 240, 100);
+    ctx.fillText("Game Over - SPACE to restart", 250, 100);
+  }
+
+  if (won) {
+    ctx.fillText("Congrats, you a Doctor!", 260, 90);
+    ctx.fillText("Press SPACE to continue", 270, 110);
   }
 }
 
