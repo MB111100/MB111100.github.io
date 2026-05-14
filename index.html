@@ -1063,9 +1063,14 @@ var PACMAN = (function () {
     };
     
     function completedLevel() {
-        setState(WAITING);
+        
         level += 1;
-        lives += 1;
+        if (level === 2) {
+             window.location.href = "youtube.com";
+             return;
+        }
+        
+        setState(WAITING);
         map.reset();
         user.newLevel();
         startLevel();
