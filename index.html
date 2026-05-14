@@ -1065,6 +1065,7 @@ var PACMAN = (function () {
     function completedLevel() {
         setState(WAITING);
         level += 1;
+        lives += 1;
         map.reset();
         user.newLevel();
         startLevel();
